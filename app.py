@@ -7,7 +7,7 @@ import streamlit as st
 import ai_service
 import capture
 import database
-from live_interview import live_interview
+from live_interview import device_check, live_interview
 
 try:
     from streamlit_webrtc import webrtc_streamer  # noqa: F401
@@ -151,7 +151,7 @@ def device_check_view():
         unsafe_allow_html=True,
     )
     st.info("Allow camera and microphone access when your browser asks. Say a few words so the microphone meter can confirm your input.")
-    result = live_interview(mode="precheck", key="device_check")
+    result = device_check(key="device_check")
     if result and result.get("type") == "device_ready":
         st.session_state.device_checked = True
         st.rerun()

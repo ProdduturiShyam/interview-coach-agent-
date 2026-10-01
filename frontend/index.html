@@ -236,7 +236,7 @@
     }
     function render(data) {
       args = data.args || {};
-      if (args.mode === "precheck") { renderPrecheck(); return; }
+      if (args.check) { renderPrecheck(); return; }
       precheck.hidden = true; interviewBox.hidden = false;
       if (!args.active) { window.speechSynthesis.cancel(); if (listening) stopListening(); setState("Live mode is paused."); return; }
       if (lastReplay === args.replay && speaking) return;
