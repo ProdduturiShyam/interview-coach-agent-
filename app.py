@@ -59,7 +59,7 @@ def setup_view():
     f3.markdown('<div class="feature-card"><strong>📈 Track your growth</strong><span>Save your attempts and see how your interview performance improves.</span></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-card"><h3>Build your practice session</h3><p class="muted">Tell the coach what you want to practise. You can change these settings for every attempt.</p></div>', unsafe_allow_html=True)
     with st.form("setup"):
-        name = st.text_input("👋 What should the interviewer call you?", placeholder="e.g. Bharath")
+        name = st.text_input("👋 What should the interviewer call you?", placeholder="Enter your name here")
         c1, c2 = st.columns(2)
         role = c1.text_input("🎯 Target role", "Software Engineer")
         level = c2.selectbox("📊 Experience level", ["Entry level", "Mid level", "Senior", "Staff / Lead"])
