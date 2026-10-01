@@ -15,6 +15,16 @@ streamlit run app.py
 
 Open the displayed local URL. The SQLite file `interview_coach.db` is created automatically.
 
+## Google login
+
+The app uses Streamlit's Google OpenID Connect login. Install dependencies, copy
+`.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, and fill in the
+Google OAuth client values. Register `http://localhost:8501/oauth2callback` as
+an authorized redirect URI in Google Cloud Console. For a deployed app, use the
+deployed URL with `/oauth2callback` instead.
+
+Never commit `.streamlit/secrets.toml` or share its client secret.
+
 ## Optional AI
 
 Install [Ollama](https://ollama.com), start it, and pull a model:

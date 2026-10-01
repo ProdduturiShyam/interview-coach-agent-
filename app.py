@@ -49,6 +49,27 @@ def opening_question(name: str, role: str) -> str:
     )
 
 
+def login_view():
+    st.markdown(
+        """<style>
+        [data-testid="stSidebar"] {display:none;}
+        [data-testid="stAppViewContainer"] {margin-left:0;}
+        [data-testid="stHeader"] {background:transparent;}
+        .block-container {max-width:760px; min-height:calc(100vh - 2rem); display:flex; flex-direction:column; justify-content:center;}
+        .login-copy {text-align:center; color:#64748b; margin:-.5rem 0 1.5rem;}
+        </style>""",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero"><h1>🎯 Welcome to Interview Coach</h1>'
+        '<p>Sign in to save your practice sessions, track your progress, and continue improving.</p></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('<p class="login-copy">Use your Google account to securely continue.</p>', unsafe_allow_html=True)
+    if st.button("Continue with Google", type="primary", width="stretch"):
+        st.login("google")
+
+
 def setup_view():
     st.markdown(
         '<div class="hero"><h1>🎯 Your next interview starts here</h1>'
@@ -340,6 +361,10 @@ def report_view():
 
 def dashboard():
     st.sidebar.title("Interview Coach")
+    if st.user.is_logged_in:
+        st.sidebar.caption(st.user.email or st.user.name or "Signed in with Google")
+        if st.sidebar.button("Log out", use_container_width=True):
+            st.logout()
     if st.sidebar.button("＋ New interview", use_container_width=True):
         reset()
         st.rerun()
@@ -352,6 +377,10 @@ def dashboard():
         st.sidebar.write(f"**{row['overall_score']:.1f}/10** · {row['job_role']}")
         st.sidebar.caption(row["created_at"][:10])
 
+
+if not getattr(st.user, "is_logged_in", False):
+    login_view()
+    st.stop()
 
 dashboard()
 if "session_id" not in st.session_state:
