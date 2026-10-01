@@ -15,15 +15,16 @@ streamlit run app.py
 
 Open the displayed local URL. The SQLite file `interview_coach.db` is created automatically.
 
-## Google login
+## Account login and email OTP
 
-The app uses Streamlit's Google OpenID Connect login. Install dependencies, copy
-`.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, and fill in the
-Google OAuth client values. Register `http://localhost:8501/oauth2callback` as
-an authorized redirect URI in Google Cloud Console. For a deployed app, use the
-deployed URL with `/oauth2callback` instead.
+New users register with a username, password, and email address. The app sends
+a six-digit code to the email address once; later logins use the verified
+username and password. Copy `.streamlit/secrets.toml.example` to
+`.streamlit/secrets.toml` and configure SMTP before registering users.
 
-Never commit `.streamlit/secrets.toml` or share its client secret.
+For Gmail, enable two-step verification and create a Gmail app password. Use
+that app password as the SMTP password, not your normal Gmail password. Never
+commit `.streamlit/secrets.toml`.
 
 ## Optional AI
 

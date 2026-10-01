@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+import re
+
 import streamlit as st
 
 import ai_service
+import auth
 import capture
 import database
 from live_interview import device_check, live_interview
@@ -62,12 +66,81 @@ def login_view():
     )
     st.markdown(
         '<div class="hero"><h1>🎯 Welcome to Interview Coach</h1>'
-        '<p>Sign in to save your practice sessions, track your progress, and continue improving.</p></div>',
+        '<p>Verify your email once, then return with your username and password.</p></div>',
         unsafe_allow_html=True,
     )
-    st.markdown('<p class="login-copy">Use your Google account to securely continue.</p>', unsafe_allow_html=True)
-    if st.button("Continue with Google", type="primary", width="stretch"):
-        st.login("google")
+    pending = st.session_state.get("pending_verification")
+    if pending:
+        st.subheader("Verify your email")
+        st.caption(f"Enter the 6-digit code sent to {pending['email']}.")
+        with st.form("verify_email"):
+            code = st.text_input("Verification code", max_chars=6, placeholder="123456")
+            verify = st.form_submit_button("Verify email", type="primary", width="stretch")
+        if verify:
+            valid = database.verify_account_email(
+                pending["user_id"], auth.hash_otp(code), datetime.now(timezone.utc).isoformat()
+            )
+            if valid:
+                st.session_state.auth_user_id = pending["user_id"]
+                st.session_state.pop("pending_verification", None)
+                st.rerun()
+            st.error("That code is invalid or expired. Create a new account to request another code.")
+        if st.button("Back to login"):
+            st.session_state.pop("pending_verification", None)
+            st.rerun()
+        return
+
+    login_tab, register_tab = st.tabs(["Log in", "Create account"])
+    with login_tab:
+        with st.form("login"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Log in", type="primary", width="stretch")
+        if submitted:
+            account = database.account_by_username(username)
+            if not account or not account["password_hash"] or not auth.verify_password(password, account["password_hash"]):
+                st.error("Incorrect username or password.")
+            elif not account["email_verified"]:
+                st.error("Verify your email before logging in.")
+            else:
+                st.session_state.auth_user_id = int(account["user_id"])
+                st.rerun()
+    with register_tab:
+        st.caption("We will email you a one-time verification code.")
+        with st.form("register"):
+            new_username = st.text_input("Choose a username")
+            email = st.text_input("Email address")
+            new_password = st.text_input("Create password", type="password")
+            confirm_password = st.text_input("Confirm password", type="password")
+            register = st.form_submit_button("Create account", type="primary", width="stretch")
+        if register:
+            smtp = st.secrets.get("smtp")
+            valid_username = re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", new_username.strip())
+            if not valid_username:
+                st.error("Username must be 3-32 characters using letters, numbers, dot, dash, or underscore.")
+            elif "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+                st.error("Enter a valid email address.")
+            elif len(new_password) < 8:
+                st.error("Password must be at least 8 characters.")
+            elif new_password != confirm_password:
+                st.error("Passwords do not match.")
+            elif not smtp:
+                st.error("Email delivery is not configured. Add the [smtp] settings to Streamlit Secrets first.")
+            elif database.account_by_username(new_username) or database.account_by_email(email):
+                st.error("That username or email is already registered.")
+            else:
+                code = auth.create_otp()
+                expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+                try:
+                    user_id = database.create_account(
+                        new_username, email, auth.hash_password(new_password), auth.hash_otp(code), expires
+                    )
+                    auth.send_otp(recipient=email.strip(), code=code, smtp=dict(smtp))
+                except Exception:
+                    st.error("We could not send the verification email. Check your SMTP settings and try again.")
+                else:
+                    st.session_state.pending_verification = {"user_id": user_id, "email": email.strip()}
+                    st.rerun()
 
 
 def setup_view():
@@ -140,7 +213,7 @@ def setup_view():
             st.error("Please provide your name and target role.")
             return
         with st.spinner("Preparing your interview..."):
-            user_id = database.get_or_create_user(name)
+            user_id = st.session_state.auth_user_id
             session_id = database.create_session(user_id, role, level, interview_type, count, topics)
             questions = ai_service.generate_questions(
                 role, level, interview_type, count, model, topics, database.prior_questions(user_id),
@@ -361,10 +434,11 @@ def report_view():
 
 def dashboard():
     st.sidebar.title("Interview Coach")
-    if st.user.is_logged_in:
-        st.sidebar.caption(st.user.email or st.user.name or "Signed in with Google")
-        if st.sidebar.button("Log out", use_container_width=True):
-            st.logout()
+    st.sidebar.caption("Signed in")
+    if st.sidebar.button("Log out", use_container_width=True):
+        st.session_state.pop("auth_user_id", None)
+        reset()
+        st.rerun()
     if st.sidebar.button("＋ New interview", use_container_width=True):
         reset()
         st.rerun()
@@ -378,7 +452,7 @@ def dashboard():
         st.sidebar.caption(row["created_at"][:10])
 
 
-if not getattr(st.user, "is_logged_in", False):
+if not st.session_state.get("auth_user_id"):
     login_view()
     st.stop()
 

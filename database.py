@@ -33,6 +33,11 @@ def init_db(path: Path | str = DB_PATH) -> None:
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
+                email TEXT,
+                password_hash TEXT,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                otp_hash TEXT,
+                otp_expires_at TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS interview_sessions (
@@ -78,6 +83,16 @@ def init_db(path: Path | str = DB_PATH) -> None:
         user_columns = {row["name"] for row in db.execute("PRAGMA table_info(users)")}
         if "created_at" not in user_columns:
             db.execute("ALTER TABLE users ADD COLUMN created_at TEXT")
+        for name, definition in (
+            ("email", "TEXT"),
+            ("password_hash", "TEXT"),
+            ("email_verified", "INTEGER NOT NULL DEFAULT 0"),
+            ("otp_hash", "TEXT"),
+            ("otp_expires_at", "TEXT"),
+        ):
+            if name not in user_columns:
+                db.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL")
         # Migrate starter databases without breaking existing data.
         columns = {row["name"] for row in db.execute("PRAGMA table_info(interview_sessions)")}
         for name, definition in (
@@ -107,6 +122,44 @@ def get_or_create_user(name: str, path: Path | str = DB_PATH) -> int:
             return int(existing["user_id"])
         cursor = db.execute("INSERT INTO users(name, created_at) VALUES (?, ?)", (normalized_name, _now()))
         return int(cursor.lastrowid)
+
+
+def create_account(username: str, email: str, password_hash: str,
+                   otp_hash: str, otp_expires_at: str,
+                   path: Path | str = DB_PATH) -> int:
+    with connect(path) as db:
+        cursor = db.execute(
+            """INSERT INTO users(name, email, password_hash, email_verified, otp_hash, otp_expires_at, created_at)
+            VALUES (?, ?, ?, 0, ?, ?, ?)""",
+            (username.strip(), email.strip().casefold(), password_hash, otp_hash, otp_expires_at, _now()),
+        )
+        return int(cursor.lastrowid)
+
+
+def account_by_username(username: str, path: Path | str = DB_PATH) -> sqlite3.Row | None:
+    with connect(path) as db:
+        return db.execute("SELECT * FROM users WHERE name = ?", (username.strip(),)).fetchone()
+
+
+def account_by_email(email: str, path: Path | str = DB_PATH) -> sqlite3.Row | None:
+    with connect(path) as db:
+        return db.execute("SELECT * FROM users WHERE email = ?", (email.strip().casefold(),)).fetchone()
+
+
+def verify_account_email(user_id: int, otp_hash: str, now: str, path: Path | str = DB_PATH) -> bool:
+    with connect(path) as db:
+        row = db.execute(
+            "SELECT otp_hash, otp_expires_at FROM users WHERE user_id = ?", (user_id,)
+        ).fetchone()
+        if not row or not row["otp_hash"] or row["otp_hash"] != otp_hash:
+            return False
+        if not row["otp_expires_at"] or row["otp_expires_at"] < now:
+            return False
+        db.execute(
+            "UPDATE users SET email_verified=1, otp_hash=NULL, otp_expires_at=NULL WHERE user_id=?",
+            (user_id,),
+        )
+        return True
 
 
 def create_session(user_id: int, job_role: str, skill_level: str, interview_type: str,
