@@ -7,9 +7,25 @@
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #334155; }
     body { margin: 0; }
     .box { border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px 14px; background: #f8fafc; }
+    .check-layout { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 16px; align-items: start; }
+    video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: #0f172a; transform: scaleX(-1); }
+    .check-label { margin: 8px 0 4px; font-weight: 600; }
+    .meter { height: 9px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .meter-fill { height: 100%; width: 0; background: #16a34a; transition: width 80ms linear; }
+    .voice-panel { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; }
+    .voice-animation { display: flex; height: 30px; align-items: center; justify-content: center; gap: 4px; }
+    .voice-animation span { width: 4px; height: 8px; border-radius: 4px; background: #2563eb; animation: voice-wave 900ms ease-in-out infinite; }
+    .voice-animation span:nth-child(2) { animation-delay: 100ms; }
+    .voice-animation span:nth-child(3) { animation-delay: 200ms; }
+    .voice-animation span:nth-child(4) { animation-delay: 300ms; }
+    .voice-animation span:nth-child(5) { animation-delay: 400ms; }
+    .voice-animation.paused span { animation-play-state: paused; opacity: .35; }
+    @keyframes voice-wave { 0%, 100% { height: 8px; } 50% { height: 26px; } }
     .state { font-size: 0.9rem; font-weight: 600; }
     .hint { margin-top: 5px; color: #64748b; font-size: 0.78rem; }
     button { border: 0; border-radius: 8px; padding: 8px 12px; background: #2563eb; color: white; cursor: pointer; margin-top: 9px; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    @media (max-width: 640px) { .check-layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -17,15 +33,45 @@
     <div id="state" class="state">Starting hands-free mode…</div>
     <div class="hint">Allow microphone access. The browser submits your answer after a pause.</div>
     <button id="retry">Start microphone now</button>
+    <div class="voice-panel">
+      <div id="voiceAnimation" class="voice-animation paused"><span></span><span></span><span></span><span></span><span></span></div>
+      <div id="voiceLabel" class="hint">Waiting for the interviewer</div>
+    </div>
+  </div>
+  <div id="precheck" class="box" hidden>
+    <div class="check-layout">
+      <video id="preview" autoplay muted playsinline></video>
+      <div>
+        <div class="state">Camera and microphone check</div>
+        <div id="checkState" class="hint">Requesting camera and microphone access…</div>
+        <div class="check-label">Microphone input</div>
+        <div class="meter"><div id="meterFill" class="meter-fill"></div></div>
+        <div id="micHint" class="hint">Say a few words to test your microphone.</div>
+        <button id="continue" disabled>Continue to interview</button>
+        <button id="checkRetry">Try again</button>
+      </div>
+    </div>
   </div>
   <script>
     const state = document.getElementById("state");
     const retry = document.getElementById("retry");
+    const interviewBox = document.querySelector("body > .box");
+    const precheck = document.getElementById("precheck");
+    const preview = document.getElementById("preview");
+    const checkState = document.getElementById("checkState");
+    const micHint = document.getElementById("micHint");
+    const meterFill = document.getElementById("meterFill");
+    const continueButton = document.getElementById("continue");
+    const checkRetry = document.getElementById("checkRetry");
+    const voiceAnimation = document.getElementById("voiceAnimation");
+    const voiceLabel = document.getElementById("voiceLabel");
     let args = {}, speaking = false, listening = false, handled = false;
     let lastReplay = null;
     let audioContext, source, processor, stream, samples = [], startedAt = 0;
     let speakingDetected = false, lastVoiceAt = 0, levelTimer = null;
     let speakFallbackTimer = null;
+    let checkStream = null, checkAudioContext = null, checkAnalyser = null, checkFrame = null;
+    let microphoneDetected = false;
 
     function send(type, extra = {}) {
       window.parent.postMessage({
@@ -37,6 +83,67 @@
     function setState(text, canRetry = true) {
       state.textContent = text;
       retry.hidden = !canRetry;
+      if (text.startsWith("Interviewer is speaking")) {
+        voiceAnimation.classList.remove("paused");
+        voiceLabel.textContent = "Interviewer is speaking";
+      } else if (text.startsWith("Listening") || text.startsWith("Hearing")) {
+        voiceAnimation.classList.remove("paused");
+        voiceLabel.textContent = "Listening to your answer";
+      } else {
+        voiceAnimation.classList.add("paused");
+        voiceLabel.textContent = "Waiting for the interviewer";
+      }
+    }
+    function stopDeviceCheck() {
+      if (checkFrame) cancelAnimationFrame(checkFrame);
+      if (checkAudioContext) checkAudioContext.close();
+      if (checkStream) checkStream.getTracks().forEach(track => track.stop());
+      checkFrame = null; checkAudioContext = null; checkAnalyser = null; checkStream = null;
+      preview.srcObject = null;
+    }
+    function monitorMicrophone() {
+      if (!checkAnalyser) return;
+      const data = new Uint8Array(checkAnalyser.fftSize);
+      checkAnalyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for (const value of data) { const normalized = (value - 128) / 128; sum += normalized * normalized; }
+      const level = Math.min(100, Math.round(Math.sqrt(sum / data.length) * 420));
+      meterFill.style.width = level + "%";
+      if (level > 4) {
+        microphoneDetected = true;
+        micHint.textContent = "Microphone detected. Your camera preview is ready too.";
+        continueButton.disabled = false;
+      }
+      checkFrame = requestAnimationFrame(monitorMicrophone);
+    }
+    async function startDeviceCheck() {
+      stopDeviceCheck();
+      microphoneDetected = false; continueButton.disabled = true; meterFill.style.width = "0";
+      checkState.textContent = "Requesting camera and microphone access…";
+      try {
+        checkStream = await navigator.mediaDevices.getUserMedia({video: true, audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}});
+        preview.srcObject = checkStream;
+        checkAudioContext = new AudioContext();
+        checkAnalyser = checkAudioContext.createAnalyser();
+        checkAnalyser.fftSize = 1024;
+        checkAudioContext.createMediaStreamSource(checkStream).connect(checkAnalyser);
+        checkState.textContent = "Camera connected. Say a few words to test the microphone.";
+        checkFrame = requestAnimationFrame(monitorMicrophone);
+      } catch (error) {
+        checkState.textContent = "Camera or microphone access was blocked. Allow both devices and try again.";
+        micHint.textContent = "Use the lock icon in the browser address bar to reset permissions if needed.";
+      }
+    }
+    function renderPrecheck() {
+      interviewBox.hidden = true; precheck.hidden = false;
+      startDeviceCheck();
+      continueButton.onclick = () => {
+        if (!microphoneDetected) return;
+        stopDeviceCheck();
+        window.parent.postMessage({isStreamlitMessage: true, type: "streamlit:setComponentValue", value: {type: "device_ready", camera: true, microphone: true, at: Date.now()}}, "*");
+        checkState.textContent = "Devices ready.";
+      };
+      checkRetry.onclick = startDeviceCheck;
     }
     function encodeWav(input, sampleRate) {
       const buffer = new ArrayBuffer(44 + input.length * 2);
@@ -129,6 +236,8 @@
     }
     function render(data) {
       args = data.args || {};
+      if (args.mode === "precheck") { renderPrecheck(); return; }
+      precheck.hidden = true; interviewBox.hidden = false;
       if (!args.active) { window.speechSynthesis.cancel(); if (listening) stopListening(); setState("Live mode is paused."); return; }
       if (lastReplay === args.replay && speaking) return;
       lastReplay = args.replay;
@@ -156,7 +265,7 @@
       window.parent.postMessage({
         isStreamlitMessage: true,
         type: "streamlit:setFrameHeight",
-        height: 112
+        height: 360
       }, "*");
     });
   </script>

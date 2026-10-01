@@ -31,11 +31,13 @@ st.markdown("""<style>
 .feature-card span {color:#64748b; font-size:.9rem;}
 .section-card {padding:1.2rem 1.35rem; border-radius:18px; background:#f8fafc; border:1px solid #e2e8f0; margin:1rem 0;}
 .muted {color:#64748b; font-size:.9rem;}
+[data-testid="stCustomComponentV1"] {width:100% !important;}
+[data-testid="stCustomComponentV1"] iframe {width:100% !important;}
 </style>""", unsafe_allow_html=True)
 
 
 def reset():
-    for key in ("session_id", "questions", "current", "evaluations", "report", "submitted", "topics", "initial_count", "adaptive_mode", "live_mode", "live_transcript", "live_last_event", "live_replay"):
+    for key in ("session_id", "questions", "current", "evaluations", "report", "submitted", "topics", "initial_count", "adaptive_mode", "live_mode", "live_transcript", "live_last_event", "live_replay", "pending_setup", "device_checked"):
         st.session_state.pop(key, None)
 
 
@@ -133,6 +135,28 @@ def setup_view():
         st.rerun()
 
 
+def device_check_view():
+    st.markdown(
+        """<style>
+        [data-testid="stSidebar"] {display:none;}
+        [data-testid="stAppViewContainer"] {margin-left:0;}
+        [data-testid="stHeader"] {background:transparent;}
+        .block-container {max-width:1100px; min-height:calc(100vh - 2rem); display:flex; flex-direction:column; justify-content:center;}
+        </style>""",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="hero"><h1>📹 Check your camera and microphone</h1>'
+        '<p>We will check your devices first. Once they work, you can continue to the interview setup.</p></div>',
+        unsafe_allow_html=True,
+    )
+    st.info("Allow camera and microphone access when your browser asks. Say a few words so the microphone meter can confirm your input.")
+    result = live_interview(mode="precheck", key="device_check")
+    if result and result.get("type") == "device_ready":
+        st.session_state.device_checked = True
+        st.rerun()
+
+
 def interview_view():
     questions = st.session_state.questions
     index = st.session_state.current
@@ -165,8 +189,8 @@ def interview_view():
         st.info("🎙️ **Live interview is on.** Your browser will speak, listen for a pause, and continue without button clicks.")
         st.caption("Supported in Chrome/Edge desktop. Keep your speaker volume moderate and use headphones when possible to prevent the question audio from entering your answer.")
         if WEBRTC_AVAILABLE:
-            st.subheader("📹 Your live camera and microphone")
-            st.caption("The preview uses video only. The separate recorder uses your microphone once, preventing echo and duplicate words.")
+            st.subheader("📹 Your live camera")
+            st.caption("Keep this view large and centered while you answer. Your microphone is handled by the interviewer below.")
             capture.live_stream("live_camera_preview", audio=False)
         else:
             st.warning("Live camera/microphone preview is unavailable. Install `streamlit-webrtc` to enable it.")
@@ -178,6 +202,7 @@ def interview_view():
         )
         st.markdown("#### 🎙️ Interviewer is asking")
         st.info(question)
+        st.markdown("#### Live transcript")
         for item in st.session_state.get("live_transcript", []):
             with st.chat_message("assistant"):
                 st.write(item["question"])
@@ -330,7 +355,10 @@ def dashboard():
 
 dashboard()
 if "session_id" not in st.session_state:
-    setup_view()
+    if not st.session_state.get("device_checked"):
+        device_check_view()
+    else:
+        setup_view()
 elif st.session_state.current < len(st.session_state.questions):
     interview_view()
 else:
