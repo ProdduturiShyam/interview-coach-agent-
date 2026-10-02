@@ -109,7 +109,7 @@ def login_view():
                 datetime.now(timezone.utc).isoformat(), auth.hash_password(reset_password),
             ):
                 st.session_state.pop("pending_password_reset", None)
-                st.session_state.pop("forgot_password", None)
+                st.session_state.pop("show_forgot_password", None)
                 st.success("Password reset successfully. You can now log in.")
                 st.rerun()
             else:
@@ -135,9 +135,9 @@ def login_view():
                 st.session_state.auth_user_id = int(account["user_id"])
                 st.rerun()
         if st.button("Forgot password?", key="forgot_password"):
-            st.session_state.forgot_password = True
+            st.session_state.show_forgot_password = True
             st.rerun()
-        if st.session_state.get("forgot_password"):
+        if st.session_state.get("show_forgot_password"):
             st.subheader("Send a password reset code")
             with st.form("request_password_reset"):
                 reset_email = st.text_input("Account email")
@@ -175,7 +175,7 @@ def login_view():
                 else:
                     st.info("If an account uses that email, a reset code has been sent.")
             if st.button("Cancel", key="cancel_forgot_password"):
-                st.session_state.pop("forgot_password", None)
+                st.session_state.pop("show_forgot_password", None)
                 st.rerun()
     with register_tab:
         st.caption("We will email you a one-time verification code.")
@@ -203,7 +203,7 @@ def login_view():
             elif database.account_by_email(email):
                 st.error("That email is already registered. Log in or reset its password.")
                 if st.button("Forgot password?", key="forgot_password_from_register"):
-                    st.session_state.forgot_password = True
+                    st.session_state.show_forgot_password = True
                     st.rerun()
             else:
                 code = auth.create_otp()
