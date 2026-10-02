@@ -105,6 +105,49 @@ def login_view():
             else:
                 st.session_state.auth_user_id = int(account["user_id"])
                 st.rerun()
+            if st.button("Forgot password?", key="forgot_password"):
+                st.session_state.forgot_password = True
+                st.rerun()
+            if st.session_state.get("forgot_password"):
+                st.subheader("Send a password reset code")
+                with st.form("request_password_reset"):
+                    reset_email = st.text_input("Account email")
+                    request_reset = st.form_submit_button("Send reset code", width="stretch")
+                if request_reset:
+                    smtp = st.secrets.get("smtp")
+                    account = database.account_by_email(reset_email)
+                    if not smtp:
+                        st.error("Email delivery is not configured. Add the [smtp] settings to Streamlit Secrets first.")
+                    elif account:
+                        code = auth.create_otp()
+                        expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()
+                        try:
+                            reset_user_id = database.begin_password_reset(
+                                reset_email, auth.hash_otp(code), expires
+                            )
+                            auth.send_otp(
+                                recipient=reset_email.strip(),
+                                code=code,
+                                smtp=dict(smtp),
+                                subject="Your Interview Coach password reset code",
+                                message_text=(
+                                    f"Your Interview Coach password reset code is {code}.\n\n"
+                                    "It expires in 10 minutes. If you did not request this, ignore this email."
+                                ),
+                            )
+                        except Exception:
+                            st.error("We could not send the reset email. Check your SMTP settings and try again.")
+                        else:
+                            st.session_state.pending_password_reset = {
+                                "user_id": reset_user_id,
+                                "email": reset_email.strip(),
+                            }
+                            st.rerun()
+                    else:
+                        st.info("If an account uses that email, a reset code has been sent.")
+                if st.button("Cancel", key="cancel_forgot_password"):
+                    st.session_state.pop("forgot_password", None)
+                    st.rerun()
     with register_tab:
         st.caption("We will email you a one-time verification code.")
         with st.form("register"):
@@ -126,8 +169,13 @@ def login_view():
                 st.error("Passwords do not match.")
             elif not smtp:
                 st.error("Email delivery is not configured. Add the [smtp] settings to Streamlit Secrets first.")
-            elif database.account_by_username(new_username) or database.account_by_email(email):
-                st.error("That username or email is already registered.")
+            elif database.account_by_username(new_username):
+                st.error("That username is already registered. Choose another username.")
+            elif database.account_by_email(email):
+                st.error("That email is already registered. Log in or reset its password.")
+                if st.button("Forgot password?", key="forgot_password_from_register"):
+                    st.session_state.forgot_password = True
+                    st.rerun()
             else:
                 code = auth.create_otp()
                 expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()

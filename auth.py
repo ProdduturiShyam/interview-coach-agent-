@@ -38,15 +38,22 @@ def hash_otp(code: str) -> str:
     return hashlib.sha256(code.strip().encode()).hexdigest()
 
 
-def send_otp(*, recipient: str, code: str, smtp: dict[str, str]) -> None:
+def send_otp(
+    *,
+    recipient: str,
+    code: str,
+    smtp: dict[str, str],
+    subject: str = "Your Interview Coach verification code",
+    message_text: str | None = None,
+) -> None:
     message = EmailMessage()
-    message["Subject"] = "Your Interview Coach verification code"
+    message["Subject"] = subject
     message["From"] = smtp["from_email"]
     message["To"] = recipient
-    message.set_content(
+    message.set_content(message_text or (
         f"Your Interview Coach verification code is {code}.\n\n"
         "It expires in 10 minutes. If you did not create this account, ignore this email."
-    )
+    ))
     with smtplib.SMTP(smtp["host"], int(smtp.get("port", "587")), timeout=20) as server:
         server.starttls()
         server.login(smtp["username"], smtp["password"])

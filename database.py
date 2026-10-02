@@ -38,6 +38,8 @@ def init_db(path: Path | str = DB_PATH) -> None:
                 email_verified INTEGER NOT NULL DEFAULT 0,
                 otp_hash TEXT,
                 otp_expires_at TEXT,
+                reset_otp_hash TEXT,
+                reset_otp_expires_at TEXT,
                 created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS interview_sessions (
@@ -89,6 +91,8 @@ def init_db(path: Path | str = DB_PATH) -> None:
             ("email_verified", "INTEGER NOT NULL DEFAULT 0"),
             ("otp_hash", "TEXT"),
             ("otp_expires_at", "TEXT"),
+            ("reset_otp_hash", "TEXT"),
+            ("reset_otp_expires_at", "TEXT"),
         ):
             if name not in user_columns:
                 db.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
@@ -158,6 +162,41 @@ def verify_account_email(user_id: int, otp_hash: str, now: str, path: Path | str
         db.execute(
             "UPDATE users SET email_verified=1, otp_hash=NULL, otp_expires_at=NULL WHERE user_id=?",
             (user_id,),
+        )
+        return True
+
+
+def begin_password_reset(email: str, otp_hash: str, otp_expires_at: str,
+                         path: Path | str = DB_PATH) -> int | None:
+    with connect(path) as db:
+        row = db.execute(
+            "SELECT user_id FROM users WHERE email = ?", (email.strip().casefold(),)
+        ).fetchone()
+        if not row:
+            return None
+        db.execute(
+            "UPDATE users SET reset_otp_hash=?, reset_otp_expires_at=? WHERE user_id=?",
+            (otp_hash, otp_expires_at, row["user_id"]),
+        )
+        return int(row["user_id"])
+
+
+def reset_password(user_id: int, otp_hash: str, now: str, password_hash: str,
+                   path: Path | str = DB_PATH) -> bool:
+    with connect(path) as db:
+        row = db.execute(
+            "SELECT reset_otp_hash, reset_otp_expires_at FROM users WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row or row["reset_otp_hash"] != otp_hash:
+            return False
+        if not row["reset_otp_expires_at"] or row["reset_otp_expires_at"] < now:
+            return False
+        db.execute(
+            """UPDATE users
+            SET password_hash=?, reset_otp_hash=NULL, reset_otp_expires_at=NULL
+            WHERE user_id=?""",
+            (password_hash, user_id),
         )
         return True
 
