@@ -29,6 +29,8 @@ html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {overflow
 .block-container {width:100%; max-width:1220px; padding:1.5rem 1.25rem 2rem;}
 /* Keep the workspace focused on the interview instead of deployment controls. */
 .stDeployButton, [data-testid="stAppDeployButton"] {display: none !important;}
+[data-testid="stToolbar"], [data-testid="stDecoration"], [data-testid="stStatusWidget"] {display:none !important;}
+[data-testid="stHeader"] {display:none !important;}
 .hero {padding: 2rem 2.2rem; border-radius: 22px; background: linear-gradient(120deg,#172554,#312e81 55%,#4338ca); color:white; margin-bottom:1.2rem; box-shadow:0 14px 35px rgba(30,41,99,.18);}
 .hero h1 {font-size:2.4rem; line-height:1.15; overflow-wrap:anywhere; margin-bottom:.35rem;}
 .hero p {font-size:1.05rem; opacity:.9; margin:0;}

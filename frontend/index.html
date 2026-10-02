@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #334155; }
-    body { margin: 0; }
+    body { margin: 0; overflow-x: hidden; overflow-y: auto; }
     .box { border: 1px solid #cbd5e1; border-radius: 12px; padding: 12px 14px; background: #f8fafc; }
     .check-layout { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 16px; align-items: start; }
     video { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 10px; background: #0f172a; transform: scaleX(-1); }
@@ -25,7 +25,12 @@
     .hint { margin-top: 5px; color: #64748b; font-size: 0.78rem; }
     button { border: 0; border-radius: 8px; padding: 8px 12px; background: #2563eb; color: white; cursor: pointer; margin-top: 9px; }
     button:disabled { background: #94a3b8; cursor: not-allowed; }
-    @media (max-width: 640px) { .check-layout { grid-template-columns: 1fr; } }
+    @media (max-width: 640px) {
+      .box { padding: 10px; }
+      .check-layout { grid-template-columns: 1fr; gap: 10px; }
+      video { max-height: 42vh; }
+      button { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -78,6 +83,13 @@
         isStreamlitMessage: true,
         type: "streamlit:setComponentValue",
         value: {type, ...extra, at: Date.now()}
+      }, "*");
+    }
+    function setFrameHeight() {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height: Math.max(document.body.scrollHeight, 180)
       }, "*");
     }
     function setState(text, canRetry = true) {
@@ -136,6 +148,7 @@
     }
     function renderPrecheck() {
       interviewBox.hidden = true; precheck.hidden = false;
+      requestAnimationFrame(setFrameHeight);
       startDeviceCheck();
       continueButton.onclick = () => {
         if (!microphoneDetected) return;
@@ -238,6 +251,7 @@
       args = data.args || {};
       if (args.check) { renderPrecheck(); return; }
       precheck.hidden = true; interviewBox.hidden = false;
+      requestAnimationFrame(setFrameHeight);
       if (!args.active) { window.speechSynthesis.cancel(); if (listening) stopListening(); setState("Live mode is paused."); return; }
       if (lastReplay === args.replay && speaking) return;
       lastReplay = args.replay;
@@ -262,11 +276,7 @@
         type: "streamlit:componentReady",
         apiVersion: 1
       }, "*");
-      window.parent.postMessage({
-        isStreamlitMessage: true,
-        type: "streamlit:setFrameHeight",
-        height: 360
-      }, "*");
+      setFrameHeight();
     });
   </script>
 </body>
