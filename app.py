@@ -24,19 +24,35 @@ st.set_page_config(page_title="Interview Coach", page_icon="🎯", layout="wide"
 database.init_db()
 
 st.markdown("""<style>
-.block-container {max-width: 1220px; padding-top: 1.5rem;}
+*, *::before, *::after {box-sizing:border-box;}
+html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {overflow-x:hidden;}
+.block-container {width:100%; max-width:1220px; padding:1.5rem 1.25rem 2rem;}
 /* Keep the workspace focused on the interview instead of deployment controls. */
 .stDeployButton, [data-testid="stAppDeployButton"] {display: none !important;}
 .hero {padding: 2rem 2.2rem; border-radius: 22px; background: linear-gradient(120deg,#172554,#312e81 55%,#4338ca); color:white; margin-bottom:1.2rem; box-shadow:0 14px 35px rgba(30,41,99,.18);}
-.hero h1 {font-size:2.4rem; margin-bottom:.35rem;}
+.hero h1 {font-size:2.4rem; line-height:1.15; overflow-wrap:anywhere; margin-bottom:.35rem;}
 .hero p {font-size:1.05rem; opacity:.9; margin:0;}
 .feature-card {padding:1rem 1.1rem; border:1px solid #e2e8f0; border-radius:16px; background:#fff; min-height:108px; box-shadow:0 4px 15px rgba(15,23,42,.04);}
 .feature-card strong {display:block; margin-bottom:.3rem; color:#0f172a;}
 .feature-card span {color:#64748b; font-size:.9rem;}
 .section-card {padding:1.2rem 1.35rem; border-radius:18px; background:#f8fafc; border:1px solid #e2e8f0; margin:1rem 0;}
 .muted {color:#64748b; font-size:.9rem;}
+[data-testid="column"] {min-width:0;}
+[data-testid="stHorizontalBlock"] {min-width:0;}
+[data-testid="stTextInput"], [data-testid="stTextArea"], [data-testid="stSelectbox"], [data-testid="stMultiSelect"] {min-width:0;}
 [data-testid="stCustomComponentV1"] {width:100% !important;}
 [data-testid="stCustomComponentV1"] iframe {width:100% !important;}
+@media (max-width: 640px) {
+    .block-container {padding:1rem .75rem 1.5rem;}
+    .hero {padding:1.25rem 1rem; border-radius:16px; margin-bottom:.9rem;}
+    .hero h1 {font-size:1.8rem;}
+    .hero p {font-size:.95rem; line-height:1.45;}
+    .feature-card, .section-card {padding:.9rem; border-radius:12px;}
+    .feature-card {min-height:0;}
+    .section-card {margin:.75rem 0;}
+    [data-testid="stHorizontalBlock"] {gap:.5rem;}
+    [data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button {width:100%; white-space:normal;}
+}
 </style>""", unsafe_allow_html=True)
 
 
